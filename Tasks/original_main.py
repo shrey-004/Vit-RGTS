@@ -195,79 +195,6 @@ class Attention(nn.Module):
             return self.to_out(out)
         
         
-# class Transformer(nn.Module):
-#     def __init__(
-#         self, 
-#         dim, 
-#         depth, 
-#         heads, 
-#         dim_head, 
-#         mlp_dim, 
-#         dropout = 0.
-#     ):
-#         """
-#         Transformer Layer
-
-#         Architecture:
-#         -------------
-#         1. LayerNorm
-#         2. Attention
-#         3. FeedForward
-
-#         Args:
-#         -----
-#         dim: int
-#             Dimension of input
-#         depth: int
-#             layers of transformers
-#         heads: int
-#             Number of heads
-#         dim_head: int
-#             Dimension of head
-#         mlp_dim: int
-#             Dimension of MLP
-#         dropout: float
-#             Dropout rate
-
-        
-#         """
-#         super().__init__()
-        
-#         #layer norm
-#         self.norm = nn.LayerNorm(dim)
-
-#         #transformer layers data array
-#         self.layers = nn.ModuleList([])
-        
-#         #add transformer layers as depth = transformer blocks
-#         for _ in range(depth):
-#             self.layers.append(nn.ModuleList([
-#                 #attention
-#                 Attention(
-#                     dim, 
-#                     heads = heads, 
-#                     dim_head = dim_head, 
-#                     dropout = dropout
-#                 ),
-#                 #feedforward
-#                 FeedForward(dim, mlp_dim, dropout)
-#             ]))
-
-#     def forward(self, x):
-#         for attn, ff in self.layers:
-#             #layernorm before attention
-#             x = self.norm(x)
-            
-#             #parallel
-#             x = x + attn(x) + ff(x)
-        
-#         return self.norm(x)
-
-
-
-
-
-
 class Transformer(nn.Module):
     def __init__(
         self, 
@@ -325,216 +252,18 @@ class Transformer(nn.Module):
                 #feedforward
                 FeedForward(dim, mlp_dim, dropout)
             ]))
-            
-        # Define how many standard deviations from the mean counts as an "outlier"
-        self.N_STD_DEVIATIONS_FOR_THRESHOLD = 3.0
-        
 
     def forward(self, x):
-        
-        # <--- NEW CODE: We will store stats for each layer here
-        layer_stats_list = []
-        
-        for i, (attn, ff) in enumerate(self.layers):
-            
+        for attn, ff in self.layers:
             #layernorm before attention
             x = self.norm(x)
             
             #parallel
             x = x + attn(x) + ff(x)
-            
-            # <--- MODIFIED CODE: Calculate stats but DON'T print ---
-            # We use .detach() to ensure this isn't part of the computation graph
-            with torch.no_grad():
-                token_norms = torch.norm(x.detach(), p=2, dim=-1) + 1e-6
-                mean_norm = token_norms.mean()
-                std_norm = token_norms.std()
-                threshold = mean_norm + (self.N_STD_DEVIATIONS_FOR_THRESHOLD * std_norm)
-                high_norm_mask = token_norms > threshold
-                
-                num_high_norm = torch.sum(high_norm_mask).item()
-                total_tokens = high_norm_mask.numel()
-                
-                # Store stats for this batch and layer
-                layer_stats_list.append({
-                    'layer': i + 1,
-                    'num_high_norm': num_high_norm,
-                    'total_tokens': total_tokens,
-                    'mean_norm': mean_norm.item(),
-                    'threshold': threshold.item()
-                })
-            # <--- END MODIFIED CODE --->
         
-        # <--- MODIFIED RETURN: Return both the final output and the stats list
-        return self.norm(x), layer_stats_list
+        return self.norm(x)
 
 
-
-
-# class VitRGTS(nn.Module):
-#     """
-#     VitRGTS model from https://arxiv.org/abs/2106.14759
-
-#     Args:
-#     -------
-#     image_size: int
-#         Size of image
-#     patch_size: int
-#         Size of patch
-#     num_classes: int
-#         Number of classes
-#     dim: int
-#         Dimension of embedding
-#     depth: int
-#         Depth of transformer
-#     heads: int
-#         Number of heads
-#     mlp_dim: int
-#         Dimension of MLP
-#     pool: str
-#         Type of pooling
-#     channels: int
-#         Number of channels
-#     dim_head: int
-#         Dimension of head
-#     dropout: float
-#         Dropout rate
-#     emb_dropout: float
-#         Dropout rate for embedding
-    
-#     Returns:
-#     --------
-#     torch.Tensor
-#         Predictions
-    
-#     Methods:
-#     --------
-#     forward(img: torch.Tensor) -> torch.Tensor:
-#         Forward pass
-    
-#     Architecture:
-#     -------------
-#     1. Input image is passed through a patch embedding layer
-#     2. Positional embedding is added
-#     3. Dropout is applied
-#     4. Transformer is applied
-#     5. Pooling is applied
-#     6. MLP head is applied
-#     7. Output is returned
-#     """
-#     def __init__(
-#         self, 
-#         *, 
-#         image_size, 
-#         patch_size, 
-#         num_classes, 
-#         dim, 
-#         depth, 
-#         heads, 
-#         mlp_dim,
-#         num_register_tokens: int = 4, 
-#         pool = 'cls', 
-#         channels = 3, 
-#         dim_head = 64, 
-#         dropout = 0., 
-#         emb_dropout = 0.
-#     ):
-#         super().__init__()
-
-#         #patch embedding layer
-#         image_height, image_width = pair(image_size)
-#         patch_height, patch_width = pair(patch_size)
-
-#         assert image_height % patch_height == 0 and image_width % patch_width == 0, 'Image dimensions must be divisible by the patch size.'
-
-#         #calculate patch dimensions
-#         patch_dim = channels * patch_height * patch_width
-
-#         assert pool in {'cls', 'mean'}, 'pool type must be either cls (cls token) or mean (mean pooling)'
-        
-#         #patch embedding layer, rearrange, layernorm, linear, layernorm
-#         self.to_patch_embedding = nn.Sequential(
-#             Rearrange(
-#                 'b c (h p1) (w p2) -> b (h w) (p1 p2 c)',
-#                 p1 = patch_height, 
-#                 p2 = patch_width
-#             ),
-#             nn.LayerNorm(patch_dim),
-#             nn.Linear(patch_dim, dim),
-#             nn.LayerNorm(dim),
-#         )
-        
-#         #register tokens
-#         self.register_tokens = nn.Parameter(
-#             torch.randn(num_register_tokens, dim)
-#         )
-
-#         #positional embedding
-#         self.pos_embedding = pos_emb_sincos_2d(
-#             h=image_height // patch_height,
-#             w=image_width // patch_width,
-#             dim=dim,
-#         )
-        
-#         #cls token
-#         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
-
-#         #dropout
-#         self.dropout = nn.Dropout(emb_dropout)
-        
-#         #apply transformers
-#         self.transformer = Transformer(
-#             dim, 
-#             depth, 
-#             heads, 
-#             dim_head, 
-#             mlp_dim, 
-#             dropout
-#         )
-
-#         self.pool = pool
-#         self.to_latent = nn.Identity()
-        
-#         #mlp head
-#         self.mlp_head = nn.Linear(dim, num_classes)
-        
-#         #linear head
-#         self.linear_head = nn.Linear(dim, num_classes)
-
-#     def forward(self, img):
-#         # setting shape and device
-#         batch, device = img.shape[0], img.device
-        
-#         #apply patch embedding to image
-#         x = self.to_patch_embedding(img)
-
-#         # add positional embedding
-#         x += self.pos_embedding.to(device)
-        
-#         #repeat register token
-#         r = repeat(
-#             self.register_tokens, 
-#             'n d -> b n d', 
-#             b=batch
-#         )
-
-#         #pack cls token and register token
-#         x, ps = pack([x, r], 'b * d ')
-        
-#         #apply transformers
-#         x = self.transformer(x)
-        
-#         #unpack cls token and register token
-#         x, _ = unpack(x, ps, 'b * d')
-        
-#         #apply mean
-#         x = x.mean(dim=1)
-        
-#         #to latent layer
-#         x = self.to_latent(x)
-
-#         #linear head
-#         return self.linear_head(x)
 
 
 
@@ -542,7 +271,53 @@ class Transformer(nn.Module):
 class VitRGTS(nn.Module):
     """
     VitRGTS model from https://arxiv.org/abs/2106.14759
-    ... (rest of your docstring) ...
+
+    Args:
+    -------
+    image_size: int
+        Size of image
+    patch_size: int
+        Size of patch
+    num_classes: int
+        Number of classes
+    dim: int
+        Dimension of embedding
+    depth: int
+        Depth of transformer
+    heads: int
+        Number of heads
+    mlp_dim: int
+        Dimension of MLP
+    pool: str
+        Type of pooling
+    channels: int
+        Number of channels
+    dim_head: int
+        Dimension of head
+    dropout: float
+        Dropout rate
+    emb_dropout: float
+        Dropout rate for embedding
+    
+    Returns:
+    --------
+    torch.Tensor
+        Predictions
+    
+    Methods:
+    --------
+    forward(img: torch.Tensor) -> torch.Tensor:
+        Forward pass
+    
+    Architecture:
+    -------------
+    1. Input image is passed through a patch embedding layer
+    2. Positional embedding is added
+    3. Dropout is applied
+    4. Transformer is applied
+    5. Pooling is applied
+    6. MLP head is applied
+    7. Output is returned
     """
     def __init__(
         self, 
@@ -643,10 +418,8 @@ class VitRGTS(nn.Module):
         #pack cls token and register token
         x, ps = pack([x, r], 'b * d ')
         
-        # <--- MODIFIED CODE: Capture the stats from the transformer
         #apply transformers
-        x, layer_stats = self.transformer(x)
-        # <--- END MODIFIED CODE --->
+        x = self.transformer(x)
         
         #unpack cls token and register token
         x, _ = unpack(x, ps, 'b * d')
@@ -657,6 +430,5 @@ class VitRGTS(nn.Module):
         #to latent layer
         x = self.to_latent(x)
 
-        # <--- MODIFIED CODE: Return stats along with prediction
         #linear head
-        return self.linear_head(x), layer_stats
+        return self.linear_head(x)

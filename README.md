@@ -88,4 +88,4 @@ Eprint = {arXiv:2309.16588},
 - [x] Make a new training script
 - [x] Make a table of datasets used in the paper
 - [ ] Make a blog article on architecture and applications
-- [ ] Clean up operations, remove reduancy in attention, transformer, and vitgi
+- [ ] Clean up operations, remove reduancy in attention, transformer, and vitgi# Vit_RGTS_TASK1
