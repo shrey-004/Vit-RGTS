@@ -2,3 +2,4 @@ einops
 torch
 torchvision
 numpy
+tqdm

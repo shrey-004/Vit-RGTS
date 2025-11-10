@@ -370,13 +370,18 @@ class VitRGTS(nn.Module):
             r = repeat(self.register_tokens, 'n d -> b n d', b=batch)
             x, ps = pack([x, r], 'b * d')
         else:
-            ps = [x.shape[1]]  # only patches, no register tokens
+            ps = [(x.shape[1],)]  # only patches, no register tokens
 
         # 5️⃣ Pass through Transformer encoder
         x = self.transformer(x)
 
-        # 6️⃣ Separate back patch tokens and register tokens
-        x, _ = unpack(x, ps, 'b * d')
+# 6️⃣ Separate back patch tokens and register tokens (if any)
+        if self.register_tokens is not None:
+            x, _ = unpack(x, ps, 'b * d')
+        else:
+    # no registers → x is already just patch tokens
+            pass
+
 
         # 7️⃣ Global average pooling for classification
         pooled = x.mean(dim=1)
