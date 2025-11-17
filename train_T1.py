@@ -206,7 +206,7 @@ def train_epoch(model, loader, optimizer, criterion, device):
 
 # # Assuming we will train for a certain number of epochs (in this case, calculated to reach 300k steps)
 # # num_epochs = (300000 * 64) // len(train_dataset)
-num_epochs = (len(train_dataset)) // len(train_dataset)+1
+num_epochs = 10
 
 
 

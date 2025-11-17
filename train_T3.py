@@ -276,7 +276,7 @@ def run_content_probe(model, val_loader, device, patch_size, probe_epochs=10, sa
         Ytr_cls, Yva_cls = labels[tr_idx], labels[va_idx]
         print("Training decoder on HIGH tokens:", tr_idx.numel())
         _, mse_h, psnr_h = train_decoder(Xtr, Ytr, Xva, Yva, in_dim, out_dim, device, epochs=probe_epochs)
-        print("Training classifier on HIGH tokens:", tr_idx.numel())
+        # print("Training classifier on HIGH tokens:", tr_idx.numel())
         _, acc_h = train_classifier(Xtr, Ytr_cls, Xva, Yva_cls, in_dim, num_classes, device, epochs=probe_epochs)
         results['high'] = {'mse': mse_h, 'psnr': psnr_h, 'acc': acc_h}
     else:
@@ -290,7 +290,7 @@ def run_content_probe(model, val_loader, device, patch_size, probe_epochs=10, sa
         Ytr_cls, Yva_cls = labels[tr_idx], labels[va_idx]
         print("Training decoder on NORMAL tokens:", tr_idx.numel())
         _, mse_n, psnr_n = train_decoder(Xtr, Ytr, Xva, Yva, in_dim, out_dim, device, epochs=probe_epochs)
-        print("Training classifier on NORMAL tokens:", tr_idx.numel())
+        # print("Training classifier on NORMAL tokens:", tr_idx.numel())
         _, acc_n = train_classifier(Xtr, Ytr_cls, Xva, Yva_cls, in_dim, num_classes, device, epochs=probe_epochs)
         results['normal'] = {'mse': mse_n, 'psnr': psnr_n, 'acc': acc_n}
     else:
@@ -384,7 +384,7 @@ def validate_epoch(model, loader, criterion, device):
 
 # Assuming we will train for a certain number of epochs (in this case, calculated to reach 300k steps)
 # num_epochs = (300000 * 64) // len(train_dataset)
-num_epochs = 2
+num_epochs = 50
 
 
 # for epoch in range(num_epochs):

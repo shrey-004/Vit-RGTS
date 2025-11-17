@@ -25,16 +25,20 @@ from vit_rgts.main import VitRGTS
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 # 2. Data Preparation
+# 2. Data Preparation
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
 ])
 
-# Using CIFAR-10 for demonstration purposes
-cifar10 = datasets.CIFAR10(root="./data", download=True, transform=transform)
-train_size = int(0.9 * len(cifar10))
-val_size = len(cifar10) - train_size
-train_dataset, val_dataset = random_split(cifar10, [train_size, val_size])
+# Using STL-10 for demonstration purposes
+# We load the 'train' split, which contains 5,000 labeled images
+stl10_data = datasets.STL10(root="./data1", split='train', download=True, transform=transform)
+
+# Now we split that 5,000-image training set into 90% train / 10% validation
+train_size = int(0.9 * len(stl10_data))
+val_size = len(stl10_data) - train_size
+train_dataset, val_dataset = random_split(stl10_data, [train_size, val_size])
 
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)
@@ -42,7 +46,7 @@ val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False)
 # 3. Model Initialization
 model = VitRGTS(
     image_size=224,
-    patch_size=14,
+    patch_size=16,
     num_classes=10,  # CIFAR-10 has 10 classes
     dim=1024,
     depth=6,
@@ -77,15 +81,25 @@ def train_epoch(model, loader, optimizer, criterion, device):
             optimizer.zero_grad()
 
             outputs = model(imgs)
-            loss = criterion(outputs, labels)
-            loss.backward()
+            
+            # --- Start of fix ---
+            if isinstance(outputs, tuple):
+                logits = outputs[0]
+            else:
+                logits = outputs
+            # --- End of fix ---
+
+            # Use 'logits' for everything from here on
+            loss = criterion(logits, labels)
+            loss.backward()  # Do backward pass on the correct loss
 
             clip_grad_norm_(model.parameters(), 0.05)
             optimizer.step()
             scheduler.step()
 
-            batch_loss = loss.item()
-            _, predicted = outputs.max(1)
+            batch_loss = loss.item() # Get loss value
+            _, predicted = logits.max(1) # Get predictions from logits
+            
             batch_correct = predicted.eq(labels).sum().item()
             batch_acc = batch_correct / imgs.size(0)
 
@@ -100,7 +114,8 @@ def train_epoch(model, loader, optimizer, criterion, device):
             pbar.update(1)
 
     avg_loss = total_loss / len(loader)
-    avg_acc = correct / len(train_dataset)
+    # Make sure 'train_dataset' is defined, or pass len(loader.dataset)
+    avg_acc = correct / len(train_dataset) 
     return avg_loss, avg_acc
 
 def validate_epoch(model, loader, criterion, device):
@@ -113,10 +128,15 @@ def validate_epoch(model, loader, criterion, device):
                 imgs, labels = imgs.to(device), labels.to(device)
 
                 outputs = model(imgs)
-                loss = criterion(outputs, labels)
+                if isinstance(outputs, tuple):
+                    logits = outputs[0]
+                else:
+                    logits = outputs
+
+                loss = criterion(logits, labels)
 
                 batch_loss = loss.item()
-                _, predicted = outputs.max(1)
+                _, predicted = logits.max(1)
                 batch_correct = predicted.eq(labels).sum().item()
                 batch_acc = batch_correct / imgs.size(0)
 
@@ -135,7 +155,7 @@ def validate_epoch(model, loader, criterion, device):
 
 # Assuming we will train for a certain number of epochs (in this case, calculated to reach 300k steps)
 # num_epochs = (300000 * 64) // len(train_dataset)
-num_epochs = (len(train_dataset)) // len(train_dataset)+1
+num_epochs = 20
 
 
 # for epoch in range(num_epochs):
